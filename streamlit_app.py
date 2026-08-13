@@ -106,7 +106,31 @@ except Exception as e:
 # FUNCIONES AUXILIARES
 # =========================================================
 
+def normalizar_codigo(codigo):
+    """
+    Los códigos ahora son alfanuméricos.
+
+    Ejemplos:
+
+        m0001  -> M0001
+        M0001  -> M0001
+        M0002  -> M0002
+
+    No convierte el código a número.
+    """
+
+    if codigo is None:
+        return ""
+
+    return str(codigo).strip().upper()
+
+
 def convertir_entero(valor):
+    """
+    Convierte valores numéricos de Google Sheets.
+
+    Si la celda está vacía devuelve 0.
+    """
 
     if valor is None:
         return 0
@@ -121,19 +145,6 @@ def convertir_entero(valor):
 
     except (ValueError, TypeError):
         return 0
-
-
-def normalizar_codigo(codigo):
-
-    codigo = str(codigo).strip()
-
-    if not codigo:
-        return ""
-
-    if codigo.isdigit():
-        return codigo.zfill(4)
-
-    return codigo
 
 
 # =========================================================
@@ -173,7 +184,7 @@ def buscar_producto(codigo):
 
 
 # =========================================================
-# BUSCAR FILA ACTUALIZADA EN STOCK
+# BUSCAR FILA EN STOCK
 # =========================================================
 
 def buscar_fila_stock(codigo):
@@ -213,7 +224,7 @@ st.markdown(
 
 
 # =========================================================
-# MENÚ
+# MENÚ PRINCIPAL
 # =========================================================
 
 opcion = st.radio(
@@ -237,8 +248,8 @@ if opcion == "🔎 Consultar stock":
 
     codigo = st.text_input(
         "Código del artículo",
-        placeholder="Ej. 0001",
-        max_chars=4
+        placeholder="Ej. M0001",
+        max_chars=10
     )
 
     consultar = st.button(
@@ -248,20 +259,12 @@ if opcion == "🔎 Consultar stock":
 
     if consultar:
 
-        codigo = codigo.strip()
+        codigo = normalizar_codigo(codigo)
 
         if not codigo:
 
             st.warning(
                 "Por favor, ingresa un código."
-            )
-
-            st.stop()
-
-        if not codigo.isdigit():
-
-            st.warning(
-                "El código debe contener solamente números."
             )
 
             st.stop()
@@ -272,7 +275,7 @@ if opcion == "🔎 Consultar stock":
 
             st.error(
                 f"❌ No se encontró el código "
-                f"{normalizar_codigo(codigo)}."
+                f"{codigo}."
             )
 
         else:
@@ -281,15 +284,13 @@ if opcion == "🔎 Consultar stock":
                 producto.get("COD", "")
             )
 
-            item = producto.get(
-                "ITEM",
-                ""
-            )
+            item = str(
+                producto.get("ITEM", "")
+            ).strip()
 
-            ubicacion = producto.get(
-                "UBIC",
-                ""
-            )
+            ubicacion = str(
+                producto.get("UBIC", "")
+            ).strip()
 
             stock_n = convertir_entero(
                 producto.get("STOCK_N")
@@ -368,21 +369,13 @@ elif opcion == "➕ Registrar ingreso":
 
     codigo = st.text_input(
         "Código del artículo",
-        placeholder="Ej. 0001",
-        max_chars=4
+        placeholder="Ej. M0001",
+        max_chars=10
     )
 
-    codigo = codigo.strip()
+    codigo = normalizar_codigo(codigo)
 
     if codigo:
-
-        if not codigo.isdigit():
-
-            st.warning(
-                "El código debe contener solamente números."
-            )
-
-            st.stop()
 
         producto = buscar_producto(codigo)
 
@@ -390,7 +383,7 @@ elif opcion == "➕ Registrar ingreso":
 
             st.error(
                 f"❌ No se encontró el código "
-                f"{normalizar_codigo(codigo)}."
+                f"{codigo}."
             )
 
         else:
@@ -399,15 +392,13 @@ elif opcion == "➕ Registrar ingreso":
                 producto.get("COD", "")
             )
 
-            item = producto.get(
-                "ITEM",
-                ""
-            )
+            item = str(
+                producto.get("ITEM", "")
+            ).strip()
 
-            ubicacion = producto.get(
-                "UBIC",
-                ""
-            )
+            ubicacion = str(
+                producto.get("UBIC", "")
+            ).strip()
 
             stock_actual = convertir_entero(
                 producto.get("STOCK_F")
@@ -422,9 +413,11 @@ elif opcion == "➕ Registrar ingreso":
             )
 
             st.metric(
-                "Stock actual",
+                "📦 Stock actual",
                 stock_actual
             )
+
+            st.markdown("---")
 
             cantidad = st.number_input(
                 "Cantidad a ingresar",
@@ -453,37 +446,8 @@ elif opcion == "➕ Registrar ingreso":
                 cantidad = int(cantidad)
 
                 # -----------------------------------------
-                # VOLVER A LEER EL STOCK
+                # DATOS DEL MOVIMIENTO
                 # -----------------------------------------
-
-                fila_stock, registro_actual = (
-                    buscar_fila_stock(codigo_real)
-                )
-
-                if fila_stock is None:
-
-                    st.error(
-                        "❌ No se encontró el artículo "
-                        "en la hoja STOCK."
-                    )
-
-                    st.stop()
-
-                # -----------------------------------------
-                # OBTENER IN ACTUAL
-                # -----------------------------------------
-
-                in_actual = convertir_entero(
-                    registro_actual.get("IN")
-                )
-
-                # -----------------------------------------
-                # NUEVO IN
-                # -----------------------------------------
-
-                nuevo_in = (
-                    in_actual + cantidad
-                )
 
                 fecha = datetime.now().strftime(
                     "%d/%m/%Y %H:%M:%S"
@@ -501,22 +465,12 @@ elif opcion == "➕ Registrar ingreso":
                 try:
 
                     # -------------------------------------
-                    # REGISTRAR EN IN
+                    # REGISTRAR EN HOJA IN
                     # -------------------------------------
 
                     in_sheet.append_row(
                         nueva_fila,
                         value_input_option="USER_ENTERED"
-                    )
-
-                    # -------------------------------------
-                    # ACTUALIZAR IN EN STOCK
-                    # -------------------------------------
-
-                    stock_sheet.update_cell(
-                        fila_stock,
-                        4,
-                        nuevo_in
                     )
 
                     # -------------------------------------
@@ -530,10 +484,11 @@ elif opcion == "➕ Registrar ingreso":
                     )
 
                     st.info(
-                        f"**{item}**\n\n"
-                        f"Cantidad ingresada: "
-                        f"**{cantidad}**\n\n"
-                        f"Destino: **{destino}**"
+                        f"**Artículo:** {item}\n\n"
+                        f"**Código:** {codigo_real}\n\n"
+                        f"**Cantidad ingresada:** "
+                        f"{cantidad}\n\n"
+                        f"**Destino:** {destino}"
                     )
 
                     st.rerun()
@@ -558,21 +513,13 @@ elif opcion == "➖ Registrar salida":
 
     codigo = st.text_input(
         "Código del artículo",
-        placeholder="Ej. 0001",
-        max_chars=4
+        placeholder="Ej. M0001",
+        max_chars=10
     )
 
-    codigo = codigo.strip()
+    codigo = normalizar_codigo(codigo)
 
     if codigo:
-
-        if not codigo.isdigit():
-
-            st.warning(
-                "El código debe contener solamente números."
-            )
-
-            st.stop()
 
         producto = buscar_producto(codigo)
 
@@ -580,7 +527,7 @@ elif opcion == "➖ Registrar salida":
 
             st.error(
                 f"❌ No se encontró el código "
-                f"{normalizar_codigo(codigo)}."
+                f"{codigo}."
             )
 
         else:
@@ -589,15 +536,13 @@ elif opcion == "➖ Registrar salida":
                 producto.get("COD", "")
             )
 
-            item = producto.get(
-                "ITEM",
-                ""
-            )
+            item = str(
+                producto.get("ITEM", "")
+            ).strip()
 
-            ubicacion = producto.get(
-                "UBIC",
-                ""
-            )
+            ubicacion = str(
+                producto.get("UBIC", "")
+            ).strip()
 
             stock_actual = convertir_entero(
                 producto.get("STOCK_F")
@@ -616,10 +561,13 @@ elif opcion == "➖ Registrar salida":
                 stock_actual
             )
 
+            st.markdown("---")
+
             if stock_actual <= 0:
 
                 st.error(
-                    "❌ Este artículo no tiene stock disponible."
+                    "❌ Este artículo no tiene "
+                    "stock disponible."
                 )
 
             else:
@@ -652,7 +600,7 @@ elif opcion == "➖ Registrar salida":
                     cantidad = int(cantidad)
 
                     # -------------------------------------
-                    # VOLVER A LEER STOCK
+                    # VOLVER A LEER STOCK REAL
                     # -------------------------------------
 
                     fila_stock, registro_actual = (
@@ -669,25 +617,11 @@ elif opcion == "➖ Registrar salida":
                         st.stop()
 
                     # -------------------------------------
-                    # OBTENER VALORES ACTUALES
+                    # LEER STOCK_F ACTUAL
                     # -------------------------------------
 
-                    in_actual = convertir_entero(
-                        registro_actual.get("IN")
-                    )
-
-                    out_actual = convertir_entero(
-                        registro_actual.get("OUT")
-                    )
-
-                    stock_n = convertir_entero(
-                        registro_actual.get("STOCK_N")
-                    )
-
-                    stock_actual_real = (
-                        stock_n
-                        + in_actual
-                        - out_actual
+                    stock_actual_real = convertir_entero(
+                        registro_actual.get("STOCK_F")
                     )
 
                     # -------------------------------------
@@ -708,12 +642,8 @@ elif opcion == "➖ Registrar salida":
                         st.stop()
 
                     # -------------------------------------
-                    # NUEVO OUT
+                    # DATOS DEL MOVIMIENTO
                     # -------------------------------------
-
-                    nuevo_out = (
-                        out_actual + cantidad
-                    )
 
                     fecha = datetime.now().strftime(
                         "%d/%m/%Y %H:%M:%S"
@@ -731,22 +661,12 @@ elif opcion == "➖ Registrar salida":
                     try:
 
                         # ---------------------------------
-                        # REGISTRAR EN OUT
+                        # REGISTRAR EN HOJA OUT
                         # ---------------------------------
 
                         out_sheet.append_row(
                             nueva_fila,
                             value_input_option="USER_ENTERED"
-                        )
-
-                        # ---------------------------------
-                        # ACTUALIZAR OUT EN STOCK
-                        # ---------------------------------
-
-                        stock_sheet.update_cell(
-                            fila_stock,
-                            5,
-                            nuevo_out
                         )
 
                         # ---------------------------------
@@ -760,10 +680,11 @@ elif opcion == "➖ Registrar salida":
                         )
 
                         st.info(
-                            f"**{item}**\n\n"
-                            f"Cantidad retirada: "
-                            f"**{cantidad}**\n\n"
-                            f"Destino: **{destino}**"
+                            f"**Artículo:** {item}\n\n"
+                            f"**Código:** {codigo_real}\n\n"
+                            f"**Cantidad retirada:** "
+                            f"{cantidad}\n\n"
+                            f"**Destino:** {destino}"
                         )
 
                         st.rerun()
