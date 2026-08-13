@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import json
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import gspread
 from google.oauth2.service_account import Credentials
@@ -484,14 +485,14 @@ elif opcion == "➕ Registrar ingreso":
                     )
 
                     st.info(
+                        f"**Fecha y hora:** {fecha}\n\n"
                         f"**Artículo:** {item}\n\n"
                         f"**Código:** {codigo_real}\n\n"
-                        f"**Cantidad ingresada:** "
-                        f"{cantidad}\n\n"
+                        f"**Cantidad retirada:** {cantidad}\n\n"
                         f"**Destino:** {destino}"
                     )
 
-                    st.rerun()
+                    #st.rerun()
 
                 except Exception as e:
 
@@ -645,7 +646,9 @@ elif opcion == "➖ Registrar salida":
                     # DATOS DEL MOVIMIENTO
                     # -------------------------------------
 
-                    fecha = datetime.now().strftime(
+                    fecha = datetime.now(
+                        ZoneInfo("America/Lima")
+                    ).strftime(
                         "%d/%m/%Y %H:%M:%S"
                     )
 
@@ -680,14 +683,14 @@ elif opcion == "➖ Registrar salida":
                         )
 
                         st.info(
+                            f"**Fecha y hora:** {fecha}\n\n"
                             f"**Artículo:** {item}\n\n"
                             f"**Código:** {codigo_real}\n\n"
-                            f"**Cantidad retirada:** "
-                            f"{cantidad}\n\n"
+                            f"**Cantidad ingresada:** {cantidad}\n\n"
                             f"**Destino:** {destino}"
-                        )
+                        )               
 
-                        st.rerun()
+                        #st.rerun()
 
                     except Exception as e:
 
