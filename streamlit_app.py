@@ -686,7 +686,7 @@ elif opcion == "➖ Registrar salida":
                             f"**Fecha y hora:** {fecha}\n\n"
                             f"**Artículo:** {item}\n\n"
                             f"**Código:** {codigo_real}\n\n"
-                            f"**Cantidad ingresada:** {cantidad}\n\n"
+                            f"**Cantidad retirada:** {cantidad}\n\n"
                             f"**Destino:** {destino}"
                         )               
 
