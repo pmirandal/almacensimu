@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import json
+import unicodedata
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -109,15 +110,13 @@ except Exception as e:
 
 def normalizar_codigo(codigo):
     """
-    Los códigos ahora son alfanuméricos.
+    Normaliza códigos alfanuméricos.
 
     Ejemplos:
 
         m0001  -> M0001
         M0001  -> M0001
-        M0002  -> M0002
-
-    No convierte el código a número.
+        " M0001 " -> M0001
     """
 
     if codigo is None:
@@ -126,11 +125,45 @@ def normalizar_codigo(codigo):
     return str(codigo).strip().upper()
 
 
+def normalizar_texto(texto):
+    """
+    Normaliza texto para realizar búsquedas.
+
+    Permite que:
+
+        cateter
+        CATETER
+        catéter
+        Catéter
+
+    encuentren los mismos artículos.
+    """
+
+    if texto is None:
+        return ""
+
+    texto = str(texto).strip().lower()
+
+    texto = unicodedata.normalize(
+        "NFD",
+        texto
+    )
+
+    texto = "".join(
+        caracter
+        for caracter in texto
+        if unicodedata.category(caracter) != "Mn"
+    )
+
+    return texto
+
+
 def convertir_entero(valor):
     """
-    Convierte valores numéricos de Google Sheets.
+    Convierte valores provenientes de Google Sheets
+    a entero.
 
-    Si la celda está vacía devuelve 0.
+    Celda vacía = 0.
     """
 
     if valor is None:
@@ -142,9 +175,11 @@ def convertir_entero(valor):
         return 0
 
     try:
+
         return int(float(valor))
 
     except (ValueError, TypeError):
+
         return 0
 
 
@@ -159,12 +194,63 @@ def obtener_stock():
 
 
 # =========================================================
-# BUSCAR PRODUCTO
+# BUSCAR PRODUCTOS
 # =========================================================
 
-def buscar_producto(codigo):
+def buscar_productos(texto_busqueda):
 
-    codigo_buscado = normalizar_codigo(codigo)
+    texto_busqueda = normalizar_texto(
+        texto_busqueda
+    )
+
+    registros = obtener_stock()
+
+    if not texto_busqueda:
+
+        return []
+
+    resultados = []
+
+    for registro in registros:
+
+        codigo = normalizar_codigo(
+            registro.get("COD", "")
+        )
+
+        item = str(
+            registro.get("ITEM", "")
+        ).strip()
+
+        codigo_busqueda = normalizar_texto(
+            codigo
+        )
+
+        item_busqueda = normalizar_texto(
+            item
+        )
+
+        # Buscar tanto en COD como en ITEM
+        if (
+            texto_busqueda in codigo_busqueda
+            or texto_busqueda in item_busqueda
+        ):
+
+            resultados.append(
+                registro
+            )
+
+    return resultados
+
+
+# =========================================================
+# BUSCAR POR CÓDIGO EXACTO
+# =========================================================
+
+def buscar_producto_por_codigo(codigo):
+
+    codigo_buscado = normalizar_codigo(
+        codigo
+    )
 
     if not codigo_buscado:
         return None
@@ -190,7 +276,9 @@ def buscar_producto(codigo):
 
 def buscar_fila_stock(codigo):
 
-    codigo_buscado = normalizar_codigo(codigo)
+    codigo_buscado = normalizar_codigo(
+        codigo
+    )
 
     registros = stock_sheet.get_all_records()
 
@@ -211,10 +299,113 @@ def buscar_fila_stock(codigo):
 
 
 # =========================================================
+# COMPONENTE DE BÚSQUEDA DE ARTÍCULO
+# =========================================================
+
+def selector_articulo():
+
+    st.markdown(
+        "**Buscar artículo**"
+    )
+
+    texto_busqueda = st.text_input(
+        "Escribe código o parte del nombre",
+        placeholder="Ej. M0012 o cateter",
+        max_chars=100,
+        key="busqueda_articulo"
+    )
+
+    if not texto_busqueda.strip():
+
+        st.caption(
+            "Puedes buscar por código o por nombre."
+        )
+
+        return None
+
+    resultados = buscar_productos(
+        texto_busqueda
+    )
+
+    if not resultados:
+
+        st.warning(
+            "No se encontraron artículos "
+            "con esa búsqueda."
+        )
+
+        return None
+
+    # -----------------------------------------------------
+    # LIMITAR RESULTADOS
+    # -----------------------------------------------------
+
+    if len(resultados) > 50:
+
+        st.info(
+            f"Se encontraron {len(resultados)} "
+            "artículos. Escribe algo más específico "
+            "para reducir los resultados."
+        )
+
+        resultados = resultados[:50]
+
+    # -----------------------------------------------------
+    # CREAR OPCIONES
+    # -----------------------------------------------------
+
+    opciones = []
+
+    registros_por_opcion = {}
+
+    for registro in resultados:
+
+        codigo = normalizar_codigo(
+            registro.get("COD", "")
+        )
+
+        item = str(
+            registro.get("ITEM", "")
+        ).strip()
+
+        opcion = (
+            f"{codigo} — {item}"
+        )
+
+        opciones.append(opcion)
+
+        registros_por_opcion[
+            opcion
+        ] = registro
+
+    # -----------------------------------------------------
+    # SELECTBOX
+    # -----------------------------------------------------
+
+    seleccion = st.selectbox(
+        "Selecciona el artículo",
+        opciones,
+        index=None,
+        placeholder="Selecciona un artículo...",
+        key="articulo_seleccionado"
+    )
+
+    if seleccion is None:
+
+        return None
+
+    return registros_por_opcion[
+        seleccion
+    ]
+
+
+# =========================================================
 # ENCABEZADO
 # =========================================================
 
-st.title("📦 Control de Almacén FAMED")
+st.title(
+    "📦 Control de Almacén FAMED"
+)
 
 st.markdown(
     '<p class="subtitulo">'
@@ -245,119 +436,91 @@ opcion = st.radio(
 
 if opcion == "🔎 Consultar stock":
 
-    st.subheader("Consultar stock")
-
-    codigo = st.text_input(
-        "Código del artículo",
-        placeholder="Ej. M0001",
-        max_chars=10
+    st.subheader(
+        "Consultar stock"
     )
 
-    consultar = st.button(
-        "Consultar",
-        use_container_width=True
-    )
+    producto = selector_articulo()
 
-    if consultar:
+    if producto is not None:
 
-        codigo = normalizar_codigo(codigo)
+        codigo_real = normalizar_codigo(
+            producto.get("COD", "")
+        )
 
-        if not codigo:
+        item = str(
+            producto.get("ITEM", "")
+        ).strip()
 
-            st.warning(
-                "Por favor, ingresa un código."
-            )
+        ubicacion = str(
+            producto.get("UBIC", "")
+        ).strip()
 
-            st.stop()
+        stock_n = convertir_entero(
+            producto.get("STOCK_N")
+        )
 
-        producto = buscar_producto(codigo)
+        ingresos = convertir_entero(
+            producto.get("IN")
+        )
 
-        if producto is None:
+        salidas = convertir_entero(
+            producto.get("OUT")
+        )
 
-            st.error(
-                f"❌ No se encontró el código "
-                f"{codigo}."
-            )
+        stock_final = convertir_entero(
+            producto.get("STOCK_F")
+        )
 
-        else:
+        st.markdown("---")
 
-            codigo_real = normalizar_codigo(
-                producto.get("COD", "")
-            )
+        st.success(
+            "Artículo encontrado"
+        )
 
-            item = str(
-                producto.get("ITEM", "")
-            ).strip()
+        st.write(
+            f"**Código:** {codigo_real}"
+        )
 
-            ubicacion = str(
-                producto.get("UBIC", "")
-            ).strip()
+        st.write(
+            f"**Artículo:** {item}"
+        )
 
-            stock_n = convertir_entero(
-                producto.get("STOCK_N")
-            )
+        st.write(
+            f"**Ubicación:** {ubicacion}"
+        )
 
-            ingresos = convertir_entero(
-                producto.get("IN")
-            )
+        st.markdown("---")
 
-            salidas = convertir_entero(
-                producto.get("OUT")
-            )
+        col1, col2, col3 = st.columns(3)
 
-            stock_final = convertir_entero(
-                producto.get("STOCK_F")
-            )
-
-            st.success(
-                "Artículo encontrado"
-            )
-
-            st.markdown("---")
-
-            st.write(
-                f"**Código:** {codigo_real}"
-            )
-
-            st.write(
-                f"**Artículo:** {item}"
-            )
-
-            st.write(
-                f"**Ubicación:** {ubicacion}"
-            )
-
-            st.markdown("---")
-
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-
-                st.metric(
-                    "Stock inicial",
-                    stock_n
-                )
-
-            with col2:
-
-                st.metric(
-                    "Ingresos",
-                    ingresos
-                )
-
-            with col3:
-
-                st.metric(
-                    "Salidas",
-                    salidas
-                )
-
-            st.markdown("---")
+        with col1:
 
             st.metric(
-                "📦 STOCK ACTUAL",
-                stock_final
+                "Stock inicial",
+                stock_n
             )
+
+        with col2:
+
+            st.metric(
+                "Ingresos",
+                ingresos
+            )
+
+        with col3:
+
+            st.metric(
+                "Salidas",
+                salidas
+            )
+
+        st.markdown("---")
+
+        st.metric(
+            "📦 STOCK ACTUAL",
+            stock_final
+        )
 
 
 # =========================================================
@@ -366,65 +529,207 @@ if opcion == "🔎 Consultar stock":
 
 elif opcion == "➕ Registrar ingreso":
 
-    st.subheader("Registrar ingreso")
-
-    codigo = st.text_input(
-        "Código del artículo",
-        placeholder="Ej. M0001",
-        max_chars=10
+    st.subheader(
+        "Registrar ingreso"
     )
 
-    codigo = normalizar_codigo(codigo)
+    producto = selector_articulo()
 
-    if codigo:
+    if producto is not None:
 
-        producto = buscar_producto(codigo)
+        codigo_real = normalizar_codigo(
+            producto.get("COD", "")
+        )
 
-        if producto is None:
+        item = str(
+            producto.get("ITEM", "")
+        ).strip()
+
+        ubicacion = str(
+            producto.get("UBIC", "")
+        ).strip()
+
+        stock_actual = convertir_entero(
+            producto.get("STOCK_F")
+        )
+
+        st.markdown("---")
+
+        st.info(
+            f"**{codigo_real} — {item}**"
+        )
+
+        st.write(
+            f"Ubicación: **{ubicacion}**"
+        )
+
+        st.metric(
+            "📦 Stock actual",
+            stock_actual
+        )
+
+        st.markdown("---")
+
+        cantidad = st.number_input(
+            "Cantidad a ingresar",
+            min_value=1,
+            step=1,
+            value=1,
+            key="cantidad_ingreso"
+        )
+
+        destino = st.selectbox(
+            "Destino",
+            [
+                "FAEST",
+                "FAMED",
+                "FAENF",
+                "Otro"
+            ],
+            key="destino_ingreso"
+        )
+
+        registrar = st.button(
+            "➕ Registrar ingreso",
+            use_container_width=True,
+            key="boton_ingreso"
+        )
+
+        if registrar:
+
+            cantidad = int(cantidad)
+
+            # -------------------------------------------------
+            # FECHA Y HORA DE LIMA
+            # -------------------------------------------------
+
+            fecha = datetime.now(
+                ZoneInfo("America/Lima")
+            ).strftime(
+                "%d/%m/%Y %H:%M:%S"
+            )
+
+            # -------------------------------------------------
+            # NUEVA FILA PARA IN
+            # -------------------------------------------------
+
+            nueva_fila = [
+                fecha,
+                codigo_real,
+                item,
+                cantidad,
+                destino,
+                cantidad
+            ]
+
+            try:
+
+                # ---------------------------------------------
+                # GUARDAR EN IN
+                # ---------------------------------------------
+
+                in_sheet.append_row(
+                    nueva_fila,
+                    value_input_option="USER_ENTERED"
+                )
+
+                # ---------------------------------------------
+                # LIMPIAR CACHÉ
+                # ---------------------------------------------
+
+                obtener_stock.clear()
+
+                # ---------------------------------------------
+                # CONFIRMACIÓN
+                # ---------------------------------------------
+
+                st.success(
+                    "✅ Ingreso registrado correctamente."
+                )
+
+                st.info(
+                    f"**Fecha y hora:** {fecha}\n\n"
+                    f"**Artículo:** {item}\n\n"
+                    f"**Código:** {codigo_real}\n\n"
+                    f"**Cantidad ingresada:** {cantidad}\n\n"
+                    f"**Destino:** {destino}"
+                )
+
+            except Exception as e:
+
+                st.error(
+                    "❌ Ocurrió un error al registrar "
+                    "el ingreso."
+                )
+
+                st.code(
+                    str(e)
+                )
+
+
+# =========================================================
+# REGISTRAR SALIDA
+# =========================================================
+
+elif opcion == "➖ Registrar salida":
+
+    st.subheader(
+        "Registrar salida"
+    )
+
+    producto = selector_articulo()
+
+    if producto is not None:
+
+        codigo_real = normalizar_codigo(
+            producto.get("COD", "")
+        )
+
+        item = str(
+            producto.get("ITEM", "")
+        ).strip()
+
+        ubicacion = str(
+            producto.get("UBIC", "")
+        ).strip()
+
+        stock_actual = convertir_entero(
+            producto.get("STOCK_F")
+        )
+
+        st.markdown("---")
+
+        st.info(
+            f"**{codigo_real} — {item}**"
+        )
+
+        st.write(
+            f"Ubicación: **{ubicacion}**"
+        )
+
+        st.metric(
+            "📦 Stock disponible",
+            stock_actual
+        )
+
+        st.markdown("---")
+
+        if stock_actual <= 0:
 
             st.error(
-                f"❌ No se encontró el código "
-                f"{codigo}."
+                "❌ Este artículo no tiene "
+                "stock disponible."
             )
 
         else:
 
-            codigo_real = normalizar_codigo(
-                producto.get("COD", "")
-            )
-
-            item = str(
-                producto.get("ITEM", "")
-            ).strip()
-
-            ubicacion = str(
-                producto.get("UBIC", "")
-            ).strip()
-
-            stock_actual = convertir_entero(
-                producto.get("STOCK_F")
-            )
-
-            st.info(
-                f"**{codigo_real} — {item}**"
-            )
-
-            st.write(
-                f"Ubicación: **{ubicacion}**"
-            )
-
-            st.metric(
-                "📦 Stock actual",
-                stock_actual
-            )
-
-            st.markdown("---")
-
             cantidad = st.number_input(
-                "Cantidad a ingresar",
+                "Cantidad a retirar",
                 min_value=1,
+                max_value=stock_actual,
                 step=1,
-                value=1
+                value=1,
+                key="cantidad_salida"
             )
 
             destino = st.selectbox(
@@ -434,25 +739,77 @@ elif opcion == "➕ Registrar ingreso":
                     "FAMED",
                     "FAENF",
                     "Otro"
-                ]
+                ],
+                key="destino_salida"
             )
 
             registrar = st.button(
-                "➕ Registrar ingreso",
-                use_container_width=True
+                "➖ Registrar salida",
+                use_container_width=True,
+                key="boton_salida"
             )
 
             if registrar:
 
                 cantidad = int(cantidad)
 
-                # -----------------------------------------
-                # DATOS DEL MOVIMIENTO
-                # -----------------------------------------
+                # -------------------------------------------------
+                # VOLVER A LEER STOCK REAL
+                # -------------------------------------------------
 
-                fecha = datetime.now().strftime(
+                fila_stock, registro_actual = (
+                    buscar_fila_stock(
+                        codigo_real
+                    )
+                )
+
+                if fila_stock is None:
+
+                    st.error(
+                        "❌ No se encontró el artículo "
+                        "en la hoja STOCK."
+                    )
+
+                    st.stop()
+
+                # -------------------------------------------------
+                # STOCK ACTUAL REAL
+                # -------------------------------------------------
+
+                stock_actual_real = convertir_entero(
+                    registro_actual.get("STOCK_F")
+                )
+
+                # -------------------------------------------------
+                # VALIDAR STOCK
+                # -------------------------------------------------
+
+                if cantidad > stock_actual_real:
+
+                    st.error(
+                        "❌ Stock insuficiente."
+                    )
+
+                    st.warning(
+                        f"Stock disponible actualmente: "
+                        f"**{stock_actual_real}**"
+                    )
+
+                    st.stop()
+
+                # -------------------------------------------------
+                # FECHA Y HORA DE LIMA
+                # -------------------------------------------------
+
+                fecha = datetime.now(
+                    ZoneInfo("America/Lima")
+                ).strftime(
                     "%d/%m/%Y %H:%M:%S"
                 )
+
+                # -------------------------------------------------
+                # NUEVA FILA PARA OUT
+                # -------------------------------------------------
 
                 nueva_fila = [
                     fecha,
@@ -465,23 +822,27 @@ elif opcion == "➕ Registrar ingreso":
 
                 try:
 
-                    # -------------------------------------
-                    # REGISTRAR EN HOJA IN
-                    # -------------------------------------
+                    # ---------------------------------------------
+                    # GUARDAR EN OUT
+                    # ---------------------------------------------
 
-                    in_sheet.append_row(
+                    out_sheet.append_row(
                         nueva_fila,
                         value_input_option="USER_ENTERED"
                     )
 
-                    # -------------------------------------
+                    # ---------------------------------------------
                     # LIMPIAR CACHÉ
-                    # -------------------------------------
+                    # ---------------------------------------------
 
                     obtener_stock.clear()
 
+                    # ---------------------------------------------
+                    # CONFIRMACIÓN
+                    # ---------------------------------------------
+
                     st.success(
-                        "✅ Ingreso registrado correctamente."
+                        "✅ Salida registrada correctamente."
                     )
 
                     st.info(
@@ -492,211 +853,13 @@ elif opcion == "➕ Registrar ingreso":
                         f"**Destino:** {destino}"
                     )
 
-                    #st.rerun()
-
                 except Exception as e:
 
                     st.error(
                         "❌ Ocurrió un error al registrar "
-                        "el ingreso."
+                        "la salida."
                     )
 
-                    st.code(str(e))
-
-
-# =========================================================
-# REGISTRAR SALIDA
-# =========================================================
-
-elif opcion == "➖ Registrar salida":
-
-    st.subheader("Registrar salida")
-
-    codigo = st.text_input(
-        "Código del artículo",
-        placeholder="Ej. M0001",
-        max_chars=10
-    )
-
-    codigo = normalizar_codigo(codigo)
-
-    if codigo:
-
-        producto = buscar_producto(codigo)
-
-        if producto is None:
-
-            st.error(
-                f"❌ No se encontró el código "
-                f"{codigo}."
-            )
-
-        else:
-
-            codigo_real = normalizar_codigo(
-                producto.get("COD", "")
-            )
-
-            item = str(
-                producto.get("ITEM", "")
-            ).strip()
-
-            ubicacion = str(
-                producto.get("UBIC", "")
-            ).strip()
-
-            stock_actual = convertir_entero(
-                producto.get("STOCK_F")
-            )
-
-            st.info(
-                f"**{codigo_real} — {item}**"
-            )
-
-            st.write(
-                f"Ubicación: **{ubicacion}**"
-            )
-
-            st.metric(
-                "📦 Stock disponible",
-                stock_actual
-            )
-
-            st.markdown("---")
-
-            if stock_actual <= 0:
-
-                st.error(
-                    "❌ Este artículo no tiene "
-                    "stock disponible."
-                )
-
-            else:
-
-                cantidad = st.number_input(
-                    "Cantidad a retirar",
-                    min_value=1,
-                    max_value=stock_actual,
-                    step=1,
-                    value=1
-                )
-
-                destino = st.selectbox(
-                    "Destino",
-                    [
-                        "FAEST",
-                        "FAMED",
-                        "FAENF",
-                        "Otro"
-                    ]
-                )
-
-                registrar = st.button(
-                    "➖ Registrar salida",
-                    use_container_width=True
-                )
-
-                if registrar:
-
-                    cantidad = int(cantidad)
-
-                    # -------------------------------------
-                    # VOLVER A LEER STOCK REAL
-                    # -------------------------------------
-
-                    fila_stock, registro_actual = (
-                        buscar_fila_stock(codigo_real)
+                    st.code(
+                        str(e)
                     )
-
-                    if fila_stock is None:
-
-                        st.error(
-                            "❌ No se encontró el artículo "
-                            "en la hoja STOCK."
-                        )
-
-                        st.stop()
-
-                    # -------------------------------------
-                    # LEER STOCK_F ACTUAL
-                    # -------------------------------------
-
-                    stock_actual_real = convertir_entero(
-                        registro_actual.get("STOCK_F")
-                    )
-
-                    # -------------------------------------
-                    # VALIDAR STOCK
-                    # -------------------------------------
-
-                    if cantidad > stock_actual_real:
-
-                        st.error(
-                            "❌ Stock insuficiente."
-                        )
-
-                        st.warning(
-                            f"Stock disponible actualmente: "
-                            f"**{stock_actual_real}**"
-                        )
-
-                        st.stop()
-
-                    # -------------------------------------
-                    # DATOS DEL MOVIMIENTO
-                    # -------------------------------------
-
-                    fecha = datetime.now(
-                        ZoneInfo("America/Lima")
-                    ).strftime(
-                        "%d/%m/%Y %H:%M:%S"
-                    )
-
-                    nueva_fila = [
-                        fecha,
-                        codigo_real,
-                        item,
-                        cantidad,
-                        destino,
-                        cantidad
-                    ]
-
-                    try:
-
-                        # ---------------------------------
-                        # REGISTRAR EN HOJA OUT
-                        # ---------------------------------
-
-                        out_sheet.append_row(
-                            nueva_fila,
-                            value_input_option="USER_ENTERED"
-                        )
-
-                        # ---------------------------------
-                        # LIMPIAR CACHÉ
-                        # ---------------------------------
-
-                        obtener_stock.clear()
-
-                        st.success(
-                            "✅ Salida registrada correctamente."
-                        )
-
-                        st.info(
-                            f"**Fecha y hora:** {fecha}\n\n"
-                            f"**Artículo:** {item}\n\n"
-                            f"**Código:** {codigo_real}\n\n"
-                            f"**Cantidad retirada:** {cantidad}\n\n"
-                            f"**Destino:** {destino}"
-                        )               
-
-                        #st.rerun()
-
-                    except Exception as e:
-
-                        st.error(
-                            "❌ Ocurrió un error al registrar "
-                            "la salida."
-                        )
-
-                        st.code(str(e))
