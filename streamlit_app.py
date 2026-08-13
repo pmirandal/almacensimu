@@ -14,7 +14,7 @@ from google.oauth2.service_account import Credentials
 # =========================================================
 
 st.set_page_config(
-    page_title="Control de Almacén FAMED",
+    page_title="Control de Almacén",
     page_icon="📦",
     layout="centered"
 )
@@ -50,11 +50,21 @@ st.markdown(
 
 
 # =========================================================
+# CONFIGURACIÓN DE ALMACENES
+# =========================================================
+
+ALMACENES = {
+    "FAMED": "Almacén FAMED",
+    "FAENF": "Almacén FAENF"
+}
+
+
+# =========================================================
 # CONEXIÓN CON GOOGLE SHEETS
 # =========================================================
 
 @st.cache_resource
-def conectar_google_sheets():
+def conectar_google_sheets(nombre_spreadsheet):
 
     credentials_info = json.loads(
         os.environ["GOOGLE_CREDENTIALS"]
@@ -73,7 +83,7 @@ def conectar_google_sheets():
     client = gspread.authorize(credentials)
 
     spreadsheet = client.open(
-        "Almacén FAMED"
+        nombre_spreadsheet
     )
 
     stock_sheet = spreadsheet.worksheet("STOCK")
@@ -84,19 +94,87 @@ def conectar_google_sheets():
 
 
 # =========================================================
-# CONECTAR
+# SELECCIÓN DE ALMACÉN
+# =========================================================
+
+st.title("📦 Control de Almacén")
+
+st.markdown(
+    '<p class="subtitulo">'
+    'Control de stock, ingresos y salidas'
+    '</p>',
+    unsafe_allow_html=True
+)
+
+
+# ---------------------------------------------------------
+# SELECCIÓN DE UNIDAD
+# ---------------------------------------------------------
+
+if "almacen_seleccionado" not in st.session_state:
+
+    st.session_state.almacen_seleccionado = None
+
+
+if st.session_state.almacen_seleccionado is None:
+
+    st.subheader(
+        "Selecciona el almacén"
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        if st.button(
+            "🏥 FAMED",
+            use_container_width=True
+        ):
+
+            st.session_state.almacen_seleccionado = "FAMED"
+
+            st.rerun()
+
+    with col2:
+
+        if st.button(
+            "🏥 FAENF",
+            use_container_width=True
+        ):
+
+            st.session_state.almacen_seleccionado = "FAENF"
+
+            st.rerun()
+
+    st.stop()
+
+
+# =========================================================
+# ALMACÉN SELECCIONADO
+# =========================================================
+
+almacen = st.session_state.almacen_seleccionado
+
+nombre_spreadsheet = ALMACENES[almacen]
+
+
+# =========================================================
+# CONECTAR AL GOOGLE SHEET CORRESPONDIENTE
 # =========================================================
 
 try:
 
     stock_sheet, in_sheet, out_sheet = (
-        conectar_google_sheets()
+        conectar_google_sheets(
+            nombre_spreadsheet
+        )
     )
 
 except Exception as e:
 
     st.error(
-        "No se pudo conectar con Google Sheets."
+        f"No se pudo conectar con el almacén "
+        f"{almacen}."
     )
 
     st.code(str(e))
@@ -109,15 +187,6 @@ except Exception as e:
 # =========================================================
 
 def normalizar_codigo(codigo):
-    """
-    Normaliza códigos alfanuméricos.
-
-    Ejemplos:
-
-        m0001  -> M0001
-        M0001  -> M0001
-        " M0001 " -> M0001
-    """
 
     if codigo is None:
         return ""
@@ -126,18 +195,6 @@ def normalizar_codigo(codigo):
 
 
 def normalizar_texto(texto):
-    """
-    Normaliza texto para realizar búsquedas.
-
-    Permite que:
-
-        cateter
-        CATETER
-        catéter
-        Catéter
-
-    encuentren los mismos artículos.
-    """
 
     if texto is None:
         return ""
@@ -159,12 +216,6 @@ def normalizar_texto(texto):
 
 
 def convertir_entero(valor):
-    """
-    Convierte valores provenientes de Google Sheets
-    a entero.
-
-    Celda vacía = 0.
-    """
 
     if valor is None:
         return 0
@@ -229,7 +280,6 @@ def buscar_productos(texto_busqueda):
             item
         )
 
-        # Buscar tanto en COD como en ITEM
         if (
             texto_busqueda in codigo_busqueda
             or texto_busqueda in item_busqueda
@@ -240,34 +290,6 @@ def buscar_productos(texto_busqueda):
             )
 
     return resultados
-
-
-# =========================================================
-# BUSCAR POR CÓDIGO EXACTO
-# =========================================================
-
-def buscar_producto_por_codigo(codigo):
-
-    codigo_buscado = normalizar_codigo(
-        codigo
-    )
-
-    if not codigo_buscado:
-        return None
-
-    registros = obtener_stock()
-
-    for registro in registros:
-
-        codigo_registro = normalizar_codigo(
-            registro.get("COD", "")
-        )
-
-        if codigo_registro == codigo_buscado:
-
-            return registro
-
-    return None
 
 
 # =========================================================
@@ -299,7 +321,7 @@ def buscar_fila_stock(codigo):
 
 
 # =========================================================
-# COMPONENTE DE BÚSQUEDA DE ARTÍCULO
+# SELECTOR DE ARTÍCULO
 # =========================================================
 
 def selector_articulo():
@@ -400,19 +422,39 @@ def selector_articulo():
 
 
 # =========================================================
-# ENCABEZADO
+# CABECERA DEL ALMACÉN
 # =========================================================
 
-st.title(
-    "📦 Control de Almacén FAMED"
+st.success(
+    f"🏥 Almacén seleccionado: **{almacen}**"
 )
 
-st.markdown(
-    '<p class="subtitulo">'
-    'Control de stock, ingresos y salidas'
-    '</p>',
-    unsafe_allow_html=True
-)
+
+# =========================================================
+# CAMBIAR DE ALMACÉN
+# =========================================================
+
+if st.button(
+    "🔄 Cambiar de almacén",
+    use_container_width=True
+):
+
+    st.session_state.almacen_seleccionado = None
+
+    st.session_state.pop(
+        "busqueda_articulo",
+        None
+    )
+
+    st.session_state.pop(
+        "articulo_seleccionado",
+        None
+    )
+
+    st.rerun()
+
+
+st.markdown("---")
 
 
 # =========================================================
@@ -624,24 +666,12 @@ elif opcion == "➕ Registrar ingreso":
 
             try:
 
-                # ---------------------------------------------
-                # GUARDAR EN IN
-                # ---------------------------------------------
-
                 in_sheet.append_row(
                     nueva_fila,
                     value_input_option="USER_ENTERED"
                 )
 
-                # ---------------------------------------------
-                # LIMPIAR CACHÉ
-                # ---------------------------------------------
-
                 obtener_stock.clear()
-
-                # ---------------------------------------------
-                # CONFIRMACIÓN
-                # ---------------------------------------------
 
                 st.success(
                     "✅ Ingreso registrado correctamente."
@@ -822,24 +852,12 @@ elif opcion == "➖ Registrar salida":
 
                 try:
 
-                    # ---------------------------------------------
-                    # GUARDAR EN OUT
-                    # ---------------------------------------------
-
                     out_sheet.append_row(
                         nueva_fila,
                         value_input_option="USER_ENTERED"
                     )
 
-                    # ---------------------------------------------
-                    # LIMPIAR CACHÉ
-                    # ---------------------------------------------
-
                     obtener_stock.clear()
-
-                    # ---------------------------------------------
-                    # CONFIRMACIÓN
-                    # ---------------------------------------------
 
                     st.success(
                         "✅ Salida registrada correctamente."
