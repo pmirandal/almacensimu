@@ -610,8 +610,6 @@ elif menu == "Registrar salida":
 
     st.warning(
         """
-    ⚠️ IMPORTANTE ⚠️
-
     Verificar que el item esté categorizado según unidad (UND) o según caja antes de retirar.
 
     Recuerde que no pueden abrirse cajas selladas dentro del almacén.
