@@ -279,7 +279,7 @@ def selector_articulo():
 
     texto_busqueda = st.text_input(
         "Buscar por código o artículo",
-        placeholder="Ejemplo: T0012 o catéter"
+        placeholder="Ejemplo: 800540007 o mascarilla"
     )
 
     if not texto_busqueda.strip():
@@ -393,6 +393,23 @@ if menu == "Inicio":
 
     st.info(
         f"Almacén seleccionado: {almacen}"
+    )
+
+    st.markdown("---")
+
+    st.warning(
+        """
+    ¿Registraste un ingreso o salida por error?
+
+    Si necesitas corregir movimientos del almacén,
+    contacta a soporte.
+    """
+    )
+
+    st.link_button(
+        "🚨 Contactar soporte por WhatsApp 🚨",
+        "https://wa.link/0ihfly",
+        use_container_width=True
     )
 
 # =========================================================
@@ -589,6 +606,16 @@ elif menu == "Registrar salida":
 
     st.header(
         "Registrar salida"
+    )
+
+    st.warning(
+        """
+    ⚠️ IMPORTANTE ⚠️
+
+    Verificar que el item esté categorizado según unidad (UND) o según caja antes de retirar.
+
+    Recuerde que no pueden abrirse cajas selladas dentro del almacén.
+    """
     )
 
     producto = selector_articulo()
