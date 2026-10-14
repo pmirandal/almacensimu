@@ -8,59 +8,79 @@ from zoneinfo import ZoneInfo
 import gspread
 from google.oauth2.service_account import Credentials
 
-
 # =========================================================
 # CONFIGURACIÓN
 # =========================================================
 
 st.set_page_config(
-    page_title="Control de Almacén",
+    page_title="Gestión de Almacén FAMEE",
     page_icon="📦",
-    layout="centered"
+    layout="wide"
 )
 
+LOGO_URL = "https://raw.githubusercontent.com/pmirandal/almacensimu/b9b5b272dae6ba204d9979c02fe820f0f2981ef6/logo_final.png"
 
 # =========================================================
-# ESTILOS
+# SIDEBAR
 # =========================================================
 
-st.markdown(
-    """
-    <style>
+with st.sidebar:
 
-        .main {
-            max-width: 900px;
-            margin: auto;
-        }
+    st.image(
+        LOGO_URL,
+        use_container_width=True
+    )
 
-        h1 {
-            text-align: center;
-        }
+    st.title(
+        "Gestión de Almacén FAMEE"
+    )
 
-        .subtitulo {
-            text-align: center;
-            color: #666;
-            margin-bottom: 30px;
-        }
+    if st.button(
+        "🏠 Inicio",
+        use_container_width=True
+    ):
+        st.session_state.menu = "Inicio"
 
-    </style>
-    """,
-    unsafe_allow_html=True
+    if st.button(
+        "🔍 Consultar stock",
+        use_container_width=True
+    ):
+        st.session_state.menu = "Consultar stock"
+
+    if st.button(
+        "➕ Registrar ingreso",
+        use_container_width=True
+    ):
+        st.session_state.menu = "Registrar ingreso"
+
+    if st.button(
+        "➖ Registrar salida",
+        use_container_width=True
+    ):
+        st.session_state.menu = "Registrar salida"
+
+    if st.button(
+        "📜 Historial",
+        use_container_width=True
+    ):
+        st.session_state.menu = "Historial"
+
+menu = st.session_state.get(
+    "menu",
+    "Inicio"
 )
 
-
 # =========================================================
-# CONFIGURACIÓN DE ALMACENES
+# CONFIG ALMACENES
 # =========================================================
 
 ALMACENES = {
-    "FAMED": "Almacén FAMED",
+    "FAMED": "Almacen_FAMED_2",
     "FAENF": "Almacén FAENF"
 }
 
-
 # =========================================================
-# CONEXIÓN CON GOOGLE SHEETS
+# GOOGLE SHEETS
 # =========================================================
 
 @st.cache_resource
@@ -80,110 +100,39 @@ def conectar_google_sheets(nombre_spreadsheet):
         scopes=scopes
     )
 
-    client = gspread.authorize(credentials)
+    client = gspread.authorize(
+        credentials
+    )
 
     spreadsheet = client.open(
         nombre_spreadsheet
     )
 
-    stock_sheet = spreadsheet.worksheet("STOCK")
-    in_sheet = spreadsheet.worksheet("IN")
-    out_sheet = spreadsheet.worksheet("OUT")
-
-    return stock_sheet, in_sheet, out_sheet
-
-
-# =========================================================
-# SELECCIÓN DE ALMACÉN
-# =========================================================
-
-st.title("📦 Control de Almacén")
-
-st.markdown(
-    '<p class="subtitulo">'
-    'Control de stock, ingresos y salidas'
-    '</p>',
-    unsafe_allow_html=True
-)
-
-
-# ---------------------------------------------------------
-# SELECCIÓN DE UNIDAD
-# ---------------------------------------------------------
-
-if "almacen_seleccionado" not in st.session_state:
-
-    st.session_state.almacen_seleccionado = None
-
-
-if st.session_state.almacen_seleccionado is None:
-
-    st.subheader(
-        "Selecciona el almacén"
+    stock_sheet = spreadsheet.worksheet(
+        "STOCK"
     )
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        if st.button(
-            "🏥 FAMED",
-            use_container_width=True
-        ):
-
-            st.session_state.almacen_seleccionado = "FAMED"
-
-            st.rerun()
-
-    with col2:
-
-        if st.button(
-            "🏥 FAENF",
-            use_container_width=True
-        ):
-
-            st.session_state.almacen_seleccionado = "FAENF"
-
-            st.rerun()
-
-    st.stop()
-
-
-# =========================================================
-# ALMACÉN SELECCIONADO
-# =========================================================
-
-almacen = st.session_state.almacen_seleccionado
-
-nombre_spreadsheet = ALMACENES[almacen]
-
-
-# =========================================================
-# CONECTAR AL GOOGLE SHEET CORRESPONDIENTE
-# =========================================================
-
-try:
-
-    stock_sheet, in_sheet, out_sheet = (
-        conectar_google_sheets(
-            nombre_spreadsheet
-        )
+    in_sheet = spreadsheet.worksheet(
+        "IN"
     )
 
-except Exception as e:
-
-    st.error(
-        f"No se pudo conectar con el almacén "
-        f"{almacen}."
+    out_sheet = spreadsheet.worksheet(
+        "OUT"
     )
 
-    st.code(str(e))
+    log_sheet = spreadsheet.worksheet(
+        "LOG"
+    )
 
-    st.stop()
-
+    return (
+        stock_sheet,
+        in_sheet,
+        out_sheet,
+        log_sheet
+    )
 
 # =========================================================
-# FUNCIONES AUXILIARES
+# FUNCIONES
 # =========================================================
 
 def normalizar_codigo(codigo):
@@ -207,9 +156,9 @@ def normalizar_texto(texto):
     )
 
     texto = "".join(
-        caracter
-        for caracter in texto
-        if unicodedata.category(caracter) != "Mn"
+        c
+        for c in texto
+        if unicodedata.category(c) != "Mn"
     )
 
     return texto
@@ -217,35 +166,70 @@ def normalizar_texto(texto):
 
 def convertir_entero(valor):
 
-    if valor is None:
-        return 0
-
-    valor = str(valor).strip()
-
-    if valor == "":
-        return 0
-
     try:
-
         return int(float(valor))
-
-    except (ValueError, TypeError):
-
+    except:
         return 0
 
 
+def obtener_fecha():
+
+    return datetime.now(
+        ZoneInfo("America/Lima")
+    ).strftime(
+        "%d/%m/%Y %H:%M:%S"
+    )
+
 # =========================================================
-# OBTENER STOCK
+# ALMACÉN
 # =========================================================
 
-@st.cache_data(ttl=10)
+almacen = st.selectbox(
+    "Seleccionar almacén",
+    [
+        "FAMED",
+        "FAENF"
+    ]
+)
+
+nombre_spreadsheet = ALMACENES[
+    almacen
+]
+
+try:
+
+    (
+        stock_sheet,
+        in_sheet,
+        out_sheet,
+        log_sheet
+    ) = conectar_google_sheets(
+        nombre_spreadsheet
+    )
+
+except Exception as e:
+
+    st.error(
+        f"No se pudo conectar al almacén {almacen}"
+    )
+
+    st.write(type(e))
+
+    st.code(repr(e))
+
+    raise
+
+# =========================================================
+# STOCK
+# =========================================================
+
+@st.cache_data(ttl=30)
 def obtener_stock():
 
     return stock_sheet.get_all_records()
 
-
 # =========================================================
-# BUSCAR PRODUCTOS
+# BUSQUEDA
 # =========================================================
 
 def buscar_productos(texto_busqueda):
@@ -256,33 +240,29 @@ def buscar_productos(texto_busqueda):
 
     registros = obtener_stock()
 
-    if not texto_busqueda:
-
-        return []
-
     resultados = []
 
     for registro in registros:
 
         codigo = normalizar_codigo(
-            registro.get("COD", "")
+            registro.get(
+                "COD",
+                ""
+            )
         )
 
         item = str(
-            registro.get("ITEM", "")
-        ).strip()
-
-        codigo_busqueda = normalizar_texto(
-            codigo
-        )
-
-        item_busqueda = normalizar_texto(
-            item
+            registro.get(
+                "ITEM",
+                ""
+            )
         )
 
         if (
-            texto_busqueda in codigo_busqueda
-            or texto_busqueda in item_busqueda
+            texto_busqueda
+            in normalizar_texto(codigo)
+            or texto_busqueda
+            in normalizar_texto(item)
         ):
 
             resultados.append(
@@ -291,57 +271,18 @@ def buscar_productos(texto_busqueda):
 
     return resultados
 
-
 # =========================================================
-# BUSCAR FILA EN STOCK
-# =========================================================
-
-def buscar_fila_stock(codigo):
-
-    codigo_buscado = normalizar_codigo(
-        codigo
-    )
-
-    registros = stock_sheet.get_all_records()
-
-    for numero_fila, registro in enumerate(
-        registros,
-        start=2
-    ):
-
-        codigo_registro = normalizar_codigo(
-            registro.get("COD", "")
-        )
-
-        if codigo_registro == codigo_buscado:
-
-            return numero_fila, registro
-
-    return None, None
-
-
-# =========================================================
-# SELECTOR DE ARTÍCULO
+# SELECTOR ARTICULO
 # =========================================================
 
 def selector_articulo():
 
-    st.markdown(
-        "**Buscar artículo**"
-    )
-
     texto_busqueda = st.text_input(
-        "Escribe código o parte del nombre",
-        placeholder="Ej. M0012 o cateter",
-        max_chars=100,
-        key="busqueda_articulo"
+        "Buscar por código o artículo",
+        placeholder="Ejemplo: T0012 o catéter"
     )
 
     if not texto_busqueda.strip():
-
-        st.caption(
-            "Puedes buscar por código o por nombre."
-        )
 
         return None
 
@@ -352,133 +293,115 @@ def selector_articulo():
     if not resultados:
 
         st.warning(
-            "No se encontraron artículos "
-            "con esa búsqueda."
+            "No se encontraron resultados."
         )
 
         return None
 
-    # -----------------------------------------------------
-    # LIMITAR RESULTADOS
-    # -----------------------------------------------------
-
-    if len(resultados) > 50:
-
-        st.info(
-            f"Se encontraron {len(resultados)} "
-            "artículos. Escribe algo más específico "
-            "para reducir los resultados."
-        )
-
-        resultados = resultados[:50]
-
-    # -----------------------------------------------------
-    # CREAR OPCIONES
-    # -----------------------------------------------------
-
-    opciones = []
-
-    registros_por_opcion = {}
-
+    opciones = {}
+    
     for registro in resultados:
 
-        codigo = normalizar_codigo(
-            registro.get("COD", "")
+        codigo = registro.get(
+            "COD",
+            ""
         )
 
-        item = str(
-            registro.get("ITEM", "")
-        ).strip()
+        item = registro.get(
+            "ITEM",
+            ""
+        )
 
-        opcion = (
+        texto = (
             f"{codigo} — {item}"
         )
 
-        opciones.append(opcion)
-
-        registros_por_opcion[
-            opcion
+        opciones[
+            texto
         ] = registro
 
-    # -----------------------------------------------------
-    # SELECTBOX
-    # -----------------------------------------------------
-
     seleccion = st.selectbox(
-        "Selecciona el artículo",
-        opciones,
-        index=None,
-        placeholder="Selecciona un artículo...",
-        key="articulo_seleccionado"
+        "Selecciona artículo",
+        list(opciones.keys())
     )
 
-    if seleccion is None:
-
-        return None
-
-    return registros_por_opcion[
+    return opciones[
         seleccion
     ]
 
-
 # =========================================================
-# CABECERA DEL ALMACÉN
-# =========================================================
-
-st.success(
-    f"🏥 Almacén seleccionado: **{almacen}**"
-)
-
-
-# =========================================================
-# CAMBIAR DE ALMACÉN
+# INICIO
 # =========================================================
 
-if st.button(
-    "🔄 Cambiar de almacén",
-    use_container_width=True
-):
+if menu == "Inicio":
 
-    st.session_state.almacen_seleccionado = None
+    if almacen == "FAMED":
 
-    st.session_state.pop(
-        "busqueda_articulo",
-        None
+        st.title(
+            "😊 Almacén FAMED"
+        )
+
+    else:
+
+        st.title(
+            "😊 Almacén FAENF"
+        )
+
+    registros = obtener_stock()
+
+    total_articulos = len(
+        registros
     )
 
-    st.session_state.pop(
-        "articulo_seleccionado",
-        None
+    con_stock = sum(
+        1
+        for x in registros
+        if convertir_entero(
+            x.get("STOCK_F")
+        ) > 0
     )
 
-    st.rerun()
+    sin_stock = (
+        total_articulos
+        - con_stock
+    )
 
+    c1, c2, c3 = st.columns(3)
 
-st.markdown("---")
+    with c1:
 
+        st.metric(
+            "Artículos",
+            total_articulos
+        )
 
-# =========================================================
-# MENÚ PRINCIPAL
-# =========================================================
+    with c2:
 
-opcion = st.radio(
-    "Selecciona una opción",
-    [
-        "🔎 Consultar stock",
-        "➕ Registrar ingreso",
-        "➖ Registrar salida"
-    ],
-    horizontal=True
-)
+        st.metric(
+            "Con stock",
+            con_stock
+        )
 
+    with c3:
+
+        st.metric(
+            "Sin stock",
+            sin_stock
+        )
+
+    st.markdown("---")
+
+    st.info(
+        f"Almacén seleccionado: {almacen}"
+    )
 
 # =========================================================
 # CONSULTAR STOCK
 # =========================================================
 
-if opcion == "🔎 Consultar stock":
+elif menu == "Consultar stock":
 
-    st.subheader(
+    st.header(
         "Consultar stock"
     )
 
@@ -498,23 +421,9 @@ if opcion == "🔎 Consultar stock":
             producto.get("UBIC", "")
         ).strip()
 
-        stock_n = convertir_entero(
-            producto.get("STOCK_N")
-        )
-
-        ingresos = convertir_entero(
-            producto.get("IN")
-        )
-
-        salidas = convertir_entero(
-            producto.get("OUT")
-        )
-
         stock_final = convertir_entero(
             producto.get("STOCK_F")
         )
-
-        st.markdown("---")
 
         st.success(
             "Artículo encontrado"
@@ -528,50 +437,29 @@ if opcion == "🔎 Consultar stock":
             f"**Artículo:** {item}"
         )
 
-        st.write(
-            f"**Ubicación:** {ubicacion}"
-        )
-
-        st.markdown("---")
-
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
 
         with col1:
 
             st.metric(
-                "Stock inicial",
-                stock_n
+                "📦 STOCK ACTUAL",
+                stock_final
             )
 
         with col2:
 
             st.metric(
-                "Ingresos",
-                ingresos
+                "📍 UBICACIÓN",
+                ubicacion
             )
-
-        with col3:
-
-            st.metric(
-                "Salidas",
-                salidas
-            )
-
-        st.markdown("---")
-
-        st.metric(
-            "📦 STOCK ACTUAL",
-            stock_final
-        )
-
 
 # =========================================================
 # REGISTRAR INGRESO
 # =========================================================
 
-elif opcion == "➕ Registrar ingreso":
+elif menu == "Registrar ingreso":
 
-    st.subheader(
+    st.header(
         "Registrar ingreso"
     )
 
@@ -595,8 +483,6 @@ elif opcion == "➕ Registrar ingreso":
             producto.get("STOCK_F")
         )
 
-        st.markdown("---")
-
         st.info(
             f"**{codigo_real} — {item}**"
         )
@@ -610,64 +496,72 @@ elif opcion == "➕ Registrar ingreso":
             stock_actual
         )
 
-        st.markdown("---")
-
         cantidad = st.number_input(
             "Cantidad a ingresar",
             min_value=1,
             step=1,
-            value=1,
-            key="cantidad_ingreso"
+            value=1
         )
 
-        destino = st.selectbox(
-            "Destino",
+        motivo = st.selectbox(
+            "Seleccionar motivo",
             [
-                "FAEST",
-                "FAMED",
-                "FAENF",
-                "Otro"
-            ],
-            key="destino_ingreso"
+                "Por pedido",
+                "Transferencia de FAMED",
+                "Transferencia de FAENF",
+                "Otro motivo"
+            ]
         )
 
-        registrar = st.button(
-            "➕ Registrar ingreso",
-            use_container_width=True,
-            key="boton_ingreso"
+        responsable = st.selectbox(
+            "Responsable",
+            [
+                "Olga",
+                "Jackelyn",
+                "Fabritcio",
+                "Carolay",
+                "Veya"
+            ]
         )
 
-        if registrar:
+        if st.button(
+            "Registrar ingreso",
+            use_container_width=True
+        ):
 
-            cantidad = int(cantidad)
-
-            # -------------------------------------------------
-            # FECHA Y HORA DE LIMA
-            # -------------------------------------------------
-
-            fecha = datetime.now(
-                ZoneInfo("America/Lima")
-            ).strftime(
-                "%d/%m/%Y %H:%M:%S"
-            )
-
-            # -------------------------------------------------
-            # NUEVA FILA PARA IN
-            # -------------------------------------------------
+            fecha = obtener_fecha()
 
             nueva_fila = [
                 fecha,
                 codigo_real,
                 item,
                 cantidad,
-                destino,
-                cantidad
+                motivo,
+                responsable
             ]
 
             try:
 
+                stock_resultante = (
+                    stock_actual + cantidad
+                )
+
                 in_sheet.append_row(
                     nueva_fila,
+                    value_input_option="USER_ENTERED"
+                )
+
+                log_sheet.append_row(
+                    [
+                        fecha,
+                        codigo_real,
+                        item,
+                        "INGRESO",
+                        cantidad,
+                        motivo,
+                        responsable,
+                        stock_resultante
+                    ],
                     value_input_option="USER_ENTERED"
                 )
 
@@ -677,33 +571,23 @@ elif opcion == "➕ Registrar ingreso":
                     "✅ Ingreso registrado correctamente."
                 )
 
-                st.info(
-                    f"**Fecha y hora:** {fecha}\n\n"
-                    f"**Artículo:** {item}\n\n"
-                    f"**Código:** {codigo_real}\n\n"
-                    f"**Cantidad ingresada:** {cantidad}\n\n"
-                    f"**Destino:** {destino}"
-                )
-
             except Exception as e:
 
                 st.error(
-                    "❌ Ocurrió un error al registrar "
-                    "el ingreso."
+                    "❌ Error registrando ingreso."
                 )
 
                 st.code(
                     str(e)
                 )
 
-
 # =========================================================
 # REGISTRAR SALIDA
 # =========================================================
 
-elif opcion == "➖ Registrar salida":
+elif menu == "Registrar salida":
 
-    st.subheader(
+    st.header(
         "Registrar salida"
     )
 
@@ -727,8 +611,6 @@ elif opcion == "➖ Registrar salida":
             producto.get("STOCK_F")
         )
 
-        st.markdown("---")
-
         st.info(
             f"**{codigo_real} — {item}**"
         )
@@ -742,13 +624,10 @@ elif opcion == "➖ Registrar salida":
             stock_actual
         )
 
-        st.markdown("---")
-
         if stock_actual <= 0:
 
             st.error(
-                "❌ Este artículo no tiene "
-                "stock disponible."
+                "❌ Este artículo no tiene stock disponible."
             )
 
         else:
@@ -758,96 +637,48 @@ elif opcion == "➖ Registrar salida":
                 min_value=1,
                 max_value=stock_actual,
                 step=1,
-                value=1,
-                key="cantidad_salida"
+                value=1
             )
 
-            destino = st.selectbox(
-                "Destino",
+            motivo = st.selectbox(
+                "Seleccionar motivo",
                 [
-                    "FAEST",
-                    "FAMED",
-                    "FAENF",
-                    "Otro"
-                ],
-                key="destino_salida"
+                    "Consumo interno",
+                    "Transferencia a FAMED",
+                    "Transferencia a FAENF",
+                    "Otro motivo"
+                ]
             )
 
-            registrar = st.button(
-                "➖ Registrar salida",
-                use_container_width=True,
-                key="boton_salida"
+            responsable = st.selectbox(
+                "Responsable",
+                [
+                    "Olga",
+                    "Jackelyn",
+                    "Fabritcio",
+                    "Carolay",
+                    "Veya"
+                ]
             )
 
-            if registrar:
+            if st.button(
+                "Registrar salida",
+                use_container_width=True
+            ):
 
-                cantidad = int(cantidad)
+                fecha = obtener_fecha()
 
-                # -------------------------------------------------
-                # VOLVER A LEER STOCK REAL
-                # -------------------------------------------------
-
-                fila_stock, registro_actual = (
-                    buscar_fila_stock(
-                        codigo_real
-                    )
+                stock_resultante = (
+                    stock_actual - cantidad
                 )
-
-                if fila_stock is None:
-
-                    st.error(
-                        "❌ No se encontró el artículo "
-                        "en la hoja STOCK."
-                    )
-
-                    st.stop()
-
-                # -------------------------------------------------
-                # STOCK ACTUAL REAL
-                # -------------------------------------------------
-
-                stock_actual_real = convertir_entero(
-                    registro_actual.get("STOCK_F")
-                )
-
-                # -------------------------------------------------
-                # VALIDAR STOCK
-                # -------------------------------------------------
-
-                if cantidad > stock_actual_real:
-
-                    st.error(
-                        "❌ Stock insuficiente."
-                    )
-
-                    st.warning(
-                        f"Stock disponible actualmente: "
-                        f"**{stock_actual_real}**"
-                    )
-
-                    st.stop()
-
-                # -------------------------------------------------
-                # FECHA Y HORA DE LIMA
-                # -------------------------------------------------
-
-                fecha = datetime.now(
-                    ZoneInfo("America/Lima")
-                ).strftime(
-                    "%d/%m/%Y %H:%M:%S"
-                )
-
-                # -------------------------------------------------
-                # NUEVA FILA PARA OUT
-                # -------------------------------------------------
 
                 nueva_fila = [
                     fecha,
                     codigo_real,
                     item,
                     cantidad,
-                    destino,
-                    cantidad
+                    motivo,
+                    responsable
                 ]
 
                 try:
@@ -857,27 +688,52 @@ elif opcion == "➖ Registrar salida":
                         value_input_option="USER_ENTERED"
                     )
 
+                    log_sheet.append_row(
+                        [
+                            fecha,
+                            codigo_real,
+                            item,
+                            "SALIDA",
+                            cantidad,
+                            motivo,
+                            responsable,
+                            stock_resultante
+                        ],
+                        value_input_option="USER_ENTERED"
+                    )
+
                     obtener_stock.clear()
 
                     st.success(
                         "✅ Salida registrada correctamente."
                     )
 
-                    st.info(
-                        f"**Fecha y hora:** {fecha}\n\n"
-                        f"**Artículo:** {item}\n\n"
-                        f"**Código:** {codigo_real}\n\n"
-                        f"**Cantidad retirada:** {cantidad}\n\n"
-                        f"**Destino:** {destino}"
-                    )
-
                 except Exception as e:
 
                     st.error(
-                        "❌ Ocurrió un error al registrar "
-                        "la salida."
+                        "❌ Error registrando salida."
                     )
 
                     st.code(
                         str(e)
                     )
+
+# =========================================================
+# HISTORIAL
+# =========================================================
+
+elif menu == "Historial":
+
+    st.header(
+        "Historial de movimientos"
+    )
+
+    movimientos = (
+        log_sheet.get_all_records()
+    )
+
+    st.dataframe(
+        movimientos,
+        use_container_width=True,
+        hide_index=True
+    )
