@@ -75,7 +75,6 @@ menu = st.session_state.get(
 # =========================================================
 
 ALMACENES = {
-    "FAMED": "Almacen_FAMED_2",
     "FAENF": "Almacén FAENF"
 }
 
@@ -184,12 +183,10 @@ def obtener_fecha():
 # ALMACÉN
 # =========================================================
 
-almacen = st.selectbox(
-    "Seleccionar almacén",
-    [
-        "FAMED",
-        "FAENF"
-    ]
+almacen = "FAENF"
+
+st.success(
+    "🏥 Almacén seleccionado: FAENF"
 )
 
 nombre_spreadsheet = ALMACENES[
