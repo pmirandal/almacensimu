@@ -75,6 +75,7 @@ menu = st.session_state.get(
 # =========================================================
 
 ALMACENES = {
+    "FAMED": "Almacen_FAMED_2",
     "FAENF": "Almacén FAENF"
 }
 
@@ -183,15 +184,87 @@ def obtener_fecha():
 # ALMACÉN
 # =========================================================
 
-almacen = "FAENF"
+if "almacen" not in st.session_state:
 
-st.success(
-    "🏥 Almacén seleccionado: FAENF"
-)
+    st.title(
+        "📦 Gestión de Almacén FAMEE"
+    )
+
+    st.subheader(
+        "Selecciona el almacén"
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        if st.button(
+            "🏥 FAMED",
+            use_container_width=True
+        ):
+
+            st.session_state.almacen = (
+                "FAMED"
+            )
+
+            st.rerun()
+
+    with col2:
+
+        if st.button(
+            "🩺 FAENF",
+            use_container_width=True
+        ):
+
+            st.session_state.almacen = (
+                "FAENF"
+            )
+
+            st.rerun()
+
+    st.stop()
+
+almacen = st.session_state.almacen
 
 nombre_spreadsheet = ALMACENES[
     almacen
 ]
+
+# =========================================================
+# STOCK
+# =========================================================
+
+@st.cache_data(ttl=300)
+def obtener_stock(nombre_spreadsheet):
+
+    return stock_sheet.get_all_records()
+
+
+# =========================================================
+# CAMBIAR ALMACÉN
+# =========================================================
+
+with st.sidebar:
+
+    st.markdown("---")
+
+    st.success(
+        f"🏥 {almacen}"
+    )
+
+
+    if st.button(
+        "🔄 Cambiar almacén",
+        use_container_width=True
+    ):
+
+        obtener_stock.clear()
+
+        del st.session_state[
+            "almacen"
+        ]
+
+        st.rerun()
 
 try:
 
@@ -216,14 +289,6 @@ except Exception as e:
 
     raise
 
-# =========================================================
-# STOCK
-# =========================================================
-
-@st.cache_data(ttl=30)
-def obtener_stock():
-
-    return stock_sheet.get_all_records()
 
 # =========================================================
 # BUSQUEDA
@@ -235,7 +300,9 @@ def buscar_productos(texto_busqueda):
         texto_busqueda
     )
 
-    registros = obtener_stock()
+    registros = obtener_stock(
+        nombre_spreadsheet
+    )
 
     resultados = []
 
@@ -335,16 +402,18 @@ if menu == "Inicio":
     if almacen == "FAMED":
 
         st.title(
-            "😊 Almacén FAMED"
+            "🏥 Bienvenido al Almacén FAMED"
         )
 
     else:
 
         st.title(
-            "😊 Almacén FAENF"
+            "🩺 Bienvenido al Almacén FAENF"
         )
 
-    registros = obtener_stock()
+    registros = obtener_stock(
+            nombre_spreadsheet
+        )
 
     total_articulos = len(
         registros
