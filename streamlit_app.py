@@ -635,15 +635,16 @@ elif menu == "Registrar ingreso":
         responsable = st.selectbox(
             "Responsable",
             [
-                "Olga",
-                "Jackelyn",
-                "Fabritcio",
+                "Serafina👑",
+                "Olga👑",
                 "Carolay",
-                "Veya",
-                "Ygnacio",
-                "Yenny",
+                "Fabritcio",
+                "Jackelyn",
                 "Marianela",
-                "Yamille"
+                "Veya",
+                "Yamille",
+                "Ygnacio",
+                "Yenny"
             ]
         )
 
