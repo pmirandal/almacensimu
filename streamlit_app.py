@@ -639,7 +639,11 @@ elif menu == "Registrar ingreso":
                 "Jackelyn",
                 "Fabritcio",
                 "Carolay",
-                "Veya"
+                "Veya",
+                "Ygnacio",
+                "Yenny",
+                "Marianela",
+                "Yamille"
             ]
         )
 
@@ -784,7 +788,11 @@ elif menu == "Registrar salida":
                     "Jackelyn",
                     "Fabritcio",
                     "Carolay",
-                    "Veya"
+                    "Veya",
+                    "Ygnacio",
+                    "Yenny",
+                    "Marianela",
+                    "Yamille"
                 ]
             )
 
