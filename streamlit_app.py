@@ -248,21 +248,57 @@ with st.sidebar:
 
     st.markdown("---")
 
-    st.success(
-        f"🏥 {almacen}"
+    st.markdown(
+        """
+        <div style="text-align:center; font-size:14px; color:#666;">
+            Recuerda que te encuentras en el almacén:
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
+    if almacen == "FAMED":
+
+        st.markdown(
+            """
+            <div style="
+                text-align:center;
+                font-size:30px;
+                font-weight:bold;
+                color:#547BE3;
+                margin-top:8px;
+                margin-bottom:10px;
+            ">
+                🏥 FAMED
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    else:
+
+        st.markdown(
+            """
+            <div style="
+                text-align:center;
+                font-size:30px;
+                font-weight:bold;
+                color:#198754;
+                margin-top:8px;
+                margin-bottom:10px;
+            ">
+                🩺 FAENF
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     if st.button(
         "🔄 Cambiar almacén",
         use_container_width=True
     ):
 
-        obtener_stock.clear()
-
-        del st.session_state[
-            "almacen"
-        ]
+        del st.session_state["almacen"]
 
         st.rerun()
 
